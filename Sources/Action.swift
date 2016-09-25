@@ -9,8 +9,12 @@ import enum Result.NoError
 /// Actions enforce serial execution. Any attempt to execute an action multiple
 /// times concurrently will return an error.
 public final class Action<Input, Output, Error: Swift.Error> {
+	private let deinitToken: Lifetime.Token
 	private let executeClosure: (Input) -> SignalProducer<Output, Error>
 	private let eventsObserver: Signal<Event<Output, Error>, NoError>.Observer
+
+	/// The lifetime of the Action.
+	public let lifetime: Lifetime
 
 	/// A signal of all events generated from applications of the Action.
 	///
@@ -69,6 +73,9 @@ public final class Action<Input, Output, Error: Swift.Error> {
 	///   - execute: A closure that returns the signal producer returned by
 	///              calling `apply(Input)` on the action.
 	public init<P: PropertyProtocol>(enabledIf property: P, _ execute: @escaping (Input) -> SignalProducer<Output, Error>) where P.Value == Bool {
+		deinitToken = Lifetime.Token()
+		lifetime = Lifetime(deinitToken)
+
 		executeClosure = execute
 		isUserEnabled = Property(property)
 
@@ -108,38 +115,63 @@ public final class Action<Input, Output, Error: Swift.Error> {
 	///   - input: A value that will be passed to the closure creating the signal
 	///            producer.
 	public func apply(_ input: Input) -> SignalProducer<Output, ActionError<Error>> {
-		return SignalProducer { observer, disposable in
-			var startedExecuting = false
+		return generator()(input)
+	}
 
-			self.executingQueue.sync {
-				if self._isEnabled.value {
-					self._isExecuting.value = true
-					startedExecuting = true
+	/// Creates a factory of SignalProducer that retains only the internal state
+	/// but the action itself, so that actions may deinitialize to tear down
+	/// bindings like properties.
+	///
+	/// - returns: A closure that accepts an arbitrary input and returns a
+	///            producer corresponding to the input.
+	fileprivate func generator() -> (Input) -> SignalProducer<Output, ActionError<Error>> {
+		return { [_isEnabled, _isExecuting, executingQueue, executeClosure, eventsObserver] input in
+			return SignalProducer { observer, disposable in
+				var startedExecuting = false
+
+				executingQueue.sync {
+					if _isEnabled.value {
+						_isExecuting.value = true
+						startedExecuting = true
+					}
 				}
-			}
 
-			if !startedExecuting {
-				observer.send(error: .disabled)
-				return
-			}
-
-			self.executeClosure(input).startWithSignal { signal, signalDisposable in
-				disposable += signalDisposable
-
-				signal.observe { event in
-					observer.action(event.mapError(ActionError.producerFailed))
-					self.eventsObserver.send(value: event)
+				if !startedExecuting {
+					observer.send(error: .disabled)
+					return
 				}
-			}
 
-			disposable += {
-				self._isExecuting.value = false
+				executeClosure(input).startWithSignal { signal, signalDisposable in
+					disposable += signalDisposable
+
+					signal.observe { event in
+						observer.action(event.mapError(ActionError.producerFailed))
+						eventsObserver.send(value: event)
+					}
+				}
+
+				disposable += {
+					_isExecuting.value = false
+				}
 			}
 		}
 	}
+
+	@discardableResult
+	public static func <~ <Source: SignalProtocol>(target: Action, signal: Source) -> Disposable? where Source.Value == Input, Source.Error == NoError{
+		let generator = target.generator()
+
+		return signal
+			.take(during: target.lifetime)
+			.observe { event in
+				if let value = event.value {
+					generator(value).start()
+				}
+			}
+	}
 }
 
-public protocol ActionProtocol {
+public protocol ActionProtocol: BindingTarget {
 	/// The type of argument to apply the action to.
 	associatedtype Input
 	/// The type of values returned by the action.
@@ -166,6 +198,12 @@ public protocol ActionProtocol {
 	///   - input: A value that will be passed to the closure creating the signal
 	///            producer.
 	func apply(_ input: Input) -> SignalProducer<Output, ActionError<Error>>
+}
+
+extension ActionProtocol {
+	public func consume(_ value: Input) {
+		apply(value).start()
+	}
 }
 
 extension Action: ActionProtocol {
