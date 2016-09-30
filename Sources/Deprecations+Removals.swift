@@ -25,7 +25,10 @@ public enum ObserverType {}
 @available(*, unavailable, renamed:"SchedulerProtocol")
 public enum SchedulerType {}
 
-@available(*, unavailable, renamed:"DateSchedulerProtocol")
+@available(*, unavailable, renamed:"TimedSchedulerProtocol")
+public enum DateSchedulerProtocol {}
+
+@available(*, unavailable, renamed:"TimedSchedulerProtocol")
 public enum DateSchedulerType {}
 
 @available(*, unavailable, renamed:"OptionalProtocol")
@@ -309,12 +312,12 @@ extension Property {
 	public convenience init(initialValue: Value, signal: Signal<Value, NoError>) { fatalError() }
 }
 
-extension DateSchedulerProtocol {
+extension TimedSchedulerProtocol {
 	@available(*, unavailable, renamed:"schedule(after:action:)")
-	func scheduleAfter(date: Date, _ action: () -> Void) -> Disposable? { fatalError() }
+	func scheduleAfter(time: DispatchWallTime, _ action: () -> Void) -> Disposable? { fatalError() }
 
 	@available(*, unavailable, renamed:"schedule(after:interval:leeway:)")
-	func scheduleAfter(date: Date, repeatingEvery: TimeInterval, withLeeway: TimeInterval, action: () -> Void) -> Disposable? { fatalError() }
+	func scheduleAfter(time: DispatchWallTime, repeatingEvery: TimeInterval, withLeeway: TimeInterval, action: () -> Void) -> Disposable? { fatalError() }
 }
 
 extension TestScheduler {

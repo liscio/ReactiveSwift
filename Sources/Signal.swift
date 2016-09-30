@@ -704,8 +704,8 @@ extension SignalProtocol {
 	///
 	/// - returns: A signal that will delay `value` and `completed` events and
 	///            will yield them on given scheduler.
-	public func delay(_ interval: TimeInterval, on scheduler: DateSchedulerProtocol) -> Signal<Value, Error> {
-		precondition(interval >= 0)
+	public func delay(_ interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol) -> Signal<Value, Error> {
+		precondition(.zero + interval >= .zero)
 
 		return Signal { observer in
 			return self.observe { event in
@@ -716,7 +716,7 @@ extension SignalProtocol {
 					}
 
 				case .value, .completed:
-					let date = scheduler.currentDate.addingTimeInterval(interval)
+					let date = scheduler.currentTime + interval
 					scheduler.schedule(after: date) {
 						observer.action(event)
 					}
@@ -1432,8 +1432,8 @@ extension SignalProtocol {
 	///
 	/// - returns: A signal that sends values at least `interval` seconds 
 	///            appart on a given scheduler.
-	public func throttle(_ interval: TimeInterval, on scheduler: DateSchedulerProtocol) -> Signal<Value, Error> {
-		precondition(interval >= 0)
+	public func throttle(_ interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol) -> Signal<Value, Error> {
+		precondition(.zero + interval >= .zero)
 
 		return Signal { observer in
 			let state: Atomic<ThrottleState<Value>> = Atomic(ThrottleState())
@@ -1450,33 +1450,30 @@ extension SignalProtocol {
 					return
 				}
 
-				var scheduleDate: Date!
+				var scheduleTime: DispatchWallTime!
 				state.modify {
 					$0.pendingValue = value
 
-					let proposedScheduleDate: Date
-					if let previousDate = $0.previousDate, previousDate.compare(scheduler.currentDate) != .orderedDescending {
-						proposedScheduleDate = previousDate.addingTimeInterval(interval)
+					let proposedScheduleTime: DispatchWallTime
+					if let previousTime = $0.previousTime, previousTime <= scheduler.currentTime {
+						proposedScheduleTime = previousTime + interval
 					} else {
-						proposedScheduleDate = scheduler.currentDate
+						proposedScheduleTime = scheduler.currentTime
 					}
 
-					switch proposedScheduleDate.compare(scheduler.currentDate) {
-					case .orderedAscending:
-						scheduleDate = scheduler.currentDate
-
-					case .orderedSame: fallthrough
-					case .orderedDescending:
-						scheduleDate = proposedScheduleDate
+					if proposedScheduleTime < scheduler.currentTime {
+						scheduleTime = scheduler.currentTime
+					} else {
+						scheduleTime = proposedScheduleTime
 					}
 				}
 
-				schedulerDisposable.innerDisposable = scheduler.schedule(after: scheduleDate) {
+				schedulerDisposable.innerDisposable = scheduler.schedule(after: scheduleTime) {
 					let pendingValue: Value? = state.modify { state in
 						defer {
 							if state.pendingValue != nil {
 								state.pendingValue = nil
-								state.previousDate = scheduleDate
+								state.previousTime = scheduleTime
 							}
 						}
 						return state.pendingValue
@@ -1509,8 +1506,8 @@ extension SignalProtocol {
 	///
 	/// - returns: A signal that sends values that are sent from `self` at least
 	///            `interval` seconds apart.
-	public func debounce(_ interval: TimeInterval, on scheduler: DateSchedulerProtocol) -> Signal<Value, Error> {
-		precondition(interval >= 0)
+	public func debounce(_ interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol) -> Signal<Value, Error> {
+		precondition(.zero + interval >= .zero)
 		
 		return self
 			.materialize()
@@ -1574,7 +1571,7 @@ extension SignalProtocol where Value: Hashable {
 }
 
 private struct ThrottleState<Value> {
-	var previousDate: Date? = nil
+	var previousTime: DispatchWallTime? = nil
 	var pendingValue: Value? = nil
 }
 
@@ -1769,12 +1766,12 @@ extension SignalProtocol {
 	/// - returns: A signal that sends events for at most `interval` seconds,
 	///            then, if not `completed` - sends `error` with failed event
 	///            on `scheduler`.
-	public func timeout(after interval: TimeInterval, raising error: Error, on scheduler: DateSchedulerProtocol) -> Signal<Value, Error> {
-		precondition(interval >= 0)
+	public func timeout(after interval: DispatchTimeInterval, raising error: Error, on scheduler: TimedSchedulerProtocol) -> Signal<Value, Error> {
+		precondition(.zero + interval >= .zero)
 
 		return Signal { observer in
 			let disposable = CompositeDisposable()
-			let date = scheduler.currentDate.addingTimeInterval(interval)
+			let date = scheduler.currentTime + interval
 
 			disposable += scheduler.schedule(after: date) {
 				observer.send(error: error)
@@ -1832,9 +1829,9 @@ extension SignalProtocol where Error == NoError {
 	///            then, if not `completed` - sends `error` with `failed` event
 	///            on `scheduler`.
 	public func timeout<NewError: Swift.Error>(
-		after interval: TimeInterval,
+		after interval: DispatchTimeInterval,
 		raising error: NewError,
-		on scheduler: DateSchedulerProtocol
+		on scheduler: TimedSchedulerProtocol
 	) -> Signal<Value, NewError> {
 		return self
 			.promoteErrors(NewError.self)

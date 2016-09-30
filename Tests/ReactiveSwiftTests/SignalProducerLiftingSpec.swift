@@ -794,7 +794,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 					testScheduler.schedule {
 						observer.send(value: 1)
 					}
-					testScheduler.schedule(after: 5) {
+					testScheduler.schedule(after: .seconds(5)) {
 						observer.send(value: 2)
 						observer.sendCompleted()
 					}
@@ -804,7 +804,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 				var completed = false
 				
 				producer
-					.delay(10, on: testScheduler)
+					.delay(.seconds(10), on: testScheduler)
 					.start { event in
 						switch event {
 						case let .value(number):
@@ -816,14 +816,14 @@ class SignalProducerLiftingSpec: QuickSpec {
 						}
 					}
 				
-				testScheduler.advance(by: 4) // send initial value
+				testScheduler.advance(by: .seconds(4)) // send initial value
 				expect(result).to(beEmpty())
 				
-				testScheduler.advance(by: 10) // send second value and receive first
+				testScheduler.advance(by: .seconds(10)) // send second value and receive first
 				expect(result) == [ 1 ]
 				expect(completed) == false
 				
-				testScheduler.advance(by: 10) // send second value and receive first
+				testScheduler.advance(by: .seconds(10)) // send second value and receive first
 				expect(result) == [ 1, 2 ]
 				expect(completed) == true
 			}
@@ -842,7 +842,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 				var errored = false
 				
 				producer
-					.delay(10, on: testScheduler)
+					.delay(.seconds(10), on: testScheduler)
 					.startWithFailed { _ in errored = true }
 				
 				testScheduler.advance()
@@ -861,7 +861,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 				let (baseProducer, baseObserver) = SignalProducer<Int, NoError>.pipe()
 				observer = baseObserver
 
-				producer = baseProducer.throttle(1, on: scheduler)
+				producer = baseProducer.throttle(.seconds(1), on: scheduler)
 			}
 
 			it("should send values on the given scheduler at no less than the interval") {
@@ -882,10 +882,10 @@ class SignalProducerLiftingSpec: QuickSpec {
 				observer.send(value: 2)
 				expect(values) == [ 0 ]
 
-				scheduler.advance(by: 1.5)
+				scheduler.advance(by: .milliseconds(1500))
 				expect(values) == [ 0, 2 ]
 
-				scheduler.advance(by: 3)
+				scheduler.advance(by: .seconds(3))
 				expect(values) == [ 0, 2 ]
 
 				observer.send(value: 3)
@@ -899,7 +899,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 				scheduler.advance()
 				expect(values) == [ 0, 2, 3 ]
 
-				scheduler.rewind(by: 2)
+				scheduler.rewind(by: .seconds(2))
 				expect(values) == [ 0, 2, 3 ]
 				
 				observer.send(value: 6)
@@ -1370,7 +1370,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 			beforeEach {
 				testScheduler = TestScheduler()
 				let (baseProducer, incomingObserver) = SignalProducer<Int, TestError>.pipe()
-				producer = baseProducer.timeout(after: 2, raising: TestError.default, on: testScheduler)
+				producer = baseProducer.timeout(after: .seconds(2), raising: TestError.default, on: testScheduler)
 				observer = incomingObserver
 			}
 
@@ -1388,7 +1388,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 					}
 				}
 
-				testScheduler.schedule(after: 1) {
+				testScheduler.schedule(after: .seconds(1)) {
 					observer.sendCompleted()
 				}
 
@@ -1414,7 +1414,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 					}
 				}
 
-				testScheduler.schedule(after: 3) {
+				testScheduler.schedule(after: .seconds(3)) {
 					observer.sendCompleted()
 				}
 
@@ -1428,7 +1428,7 @@ class SignalProducerLiftingSpec: QuickSpec {
 
 			it("should be available for NoError") {
 				let producer: SignalProducer<Int, TestError> = SignalProducer<Int, NoError>.never
-					.timeout(after: 2, raising: TestError.default, on: testScheduler)
+					.timeout(after: .seconds(2), raising: TestError.default, on: testScheduler)
 
 				_ = producer
 			}

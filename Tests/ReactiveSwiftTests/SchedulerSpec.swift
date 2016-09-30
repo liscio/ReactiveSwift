@@ -173,7 +173,7 @@ class SchedulerSpec: QuickSpec {
 
 				it("should run enqueued actions after a given date") {
 					var didRun = false
-					scheduler.schedule(after: Date()) {
+					scheduler.schedule(after: .now()) {
 						didRun = true
 						expect(Thread.isMainThread) == false
 					}
@@ -190,7 +190,7 @@ class SchedulerSpec: QuickSpec {
 					var count = 0
 					let timesToRun = 3
 
-					disposable.innerDisposable = scheduler.schedule(after: Date(), interval: 0.01, leeway: 0) {
+					disposable.innerDisposable = scheduler.schedule(after: .now(), interval: .milliseconds(10), leeway: .nanoseconds(0)) {
 						expect(Thread.isMainThread) == false
 
 						count += 1
@@ -210,16 +210,16 @@ class SchedulerSpec: QuickSpec {
 
 		describe("TestScheduler") {
 			var scheduler: TestScheduler!
-			var startDate: Date!
+			var startTime: DispatchWallTime!
 
 			// How much dates are allowed to differ when they should be "equal."
-			let dateComparisonDelta = 0.00001
+			let dateComparisonTime = DispatchTimeInterval.microseconds(10) /* 0.00001s */
 
 			beforeEach {
-				startDate = Date()
+				startTime = .now()
 
-				scheduler = TestScheduler(startDate: startDate)
-				expect(scheduler.currentDate) == startDate
+				scheduler = TestScheduler(startTime: startTime)
+				expect(scheduler.currentTime) == startTime
 			}
 
 			it("should run immediately enqueued actions upon advancement") {
@@ -238,7 +238,7 @@ class SchedulerSpec: QuickSpec {
 				expect(string) == ""
 
 				scheduler.advance()
-				expect(scheduler.currentDate).to(beCloseTo(startDate))
+				expect(scheduler.currentTime).to(beCloseTo(startTime, within: .nanoseconds(10)))
 
 				expect(string) == "foobar"
 			}
@@ -246,38 +246,38 @@ class SchedulerSpec: QuickSpec {
 			it("should run actions when advanced past the target date") {
 				var string = ""
 
-				scheduler.schedule(after: 15) { [weak scheduler] in
+				scheduler.schedule(after: .seconds(15)) { [weak scheduler] in
 					string += "bar"
 					expect(Thread.isMainThread) == true
-					expect(scheduler?.currentDate).to(beCloseTo(startDate.addingTimeInterval(15), within: dateComparisonDelta))
+					expect(scheduler?.currentTime).to(beCloseTo(startTime + .seconds(15), within: dateComparisonTime))
 				}
 
-				scheduler.schedule(after: 5) { [weak scheduler] in
+				scheduler.schedule(after: .seconds(5)) { [weak scheduler] in
 					string += "foo"
 					expect(Thread.isMainThread) == true
-					expect(scheduler?.currentDate).to(beCloseTo(startDate.addingTimeInterval(5), within: dateComparisonDelta))
+					expect(scheduler?.currentTime).to(beCloseTo(startTime + .seconds(5), within: dateComparisonTime))
 				}
 
 				expect(string) == ""
 
-				scheduler.advance(by: 10)
-				expect(scheduler.currentDate).to(beCloseTo(startDate.addingTimeInterval(10), within: TimeInterval(dateComparisonDelta)))
+				scheduler.advance(by: .seconds(10))
+				expect(scheduler.currentTime).to(beCloseTo(startTime + .seconds(10), within: dateComparisonTime))
 				expect(string) == "foo"
 
-				scheduler.advance(by: 10)
-				expect(scheduler.currentDate).to(beCloseTo(startDate.addingTimeInterval(20), within: dateComparisonDelta))
+				scheduler.advance(by: .seconds(10))
+				expect(scheduler.currentTime).to(beCloseTo(startTime + .seconds(20), within: dateComparisonTime))
 				expect(string) == "foobar"
 			}
 
 			it("should run all remaining actions in order") {
 				var string = ""
 
-				scheduler.schedule(after: 15) {
+				scheduler.schedule(after: .seconds(15)) {
 					string += "bar"
 					expect(Thread.isMainThread) == true
 				}
 
-				scheduler.schedule(after: 5) {
+				scheduler.schedule(after: .seconds(5)) {
 					string += "foo"
 					expect(Thread.isMainThread) == true
 				}
@@ -290,7 +290,7 @@ class SchedulerSpec: QuickSpec {
 				expect(string) == ""
 
 				scheduler.run()
-				expect(scheduler.currentDate) == NSDate.distantFuture
+				expect(scheduler.currentTime) == DispatchWallTime.distantFuture
 				expect(string) == "fuzzbuzzfoobar"
 			}
 		}

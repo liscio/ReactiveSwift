@@ -693,7 +693,7 @@ extension SignalProducerProtocol {
 	///
 	/// - returns: A producer that, when started, will delay `value` and
 	///            `completed` events and will yield them on given scheduler.
-	public func delay(_ interval: TimeInterval, on scheduler: DateSchedulerProtocol) -> SignalProducer<Value, Error> {
+	public func delay(_ interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol) -> SignalProducer<Value, Error> {
 		return lift { $0.delay(interval, on: scheduler) }
 	}
 
@@ -1072,7 +1072,7 @@ extension SignalProducerProtocol {
 	///
 	/// - returns: A producer that sends values at least `interval` seconds
 	///            appart on a given scheduler.
-	public func throttle(_ interval: TimeInterval, on scheduler: DateSchedulerProtocol) -> SignalProducer<Value, Error> {
+	public func throttle(_ interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol) -> SignalProducer<Value, Error> {
 		return lift { $0.throttle(interval, on: scheduler) }
 	}
 
@@ -1093,7 +1093,7 @@ extension SignalProducerProtocol {
 	///
 	/// - returns: A producer that sends values that are sent from `self` at
 	///            least `interval` seconds apart.
-	public func debounce(_ interval: TimeInterval, on scheduler: DateSchedulerProtocol) -> SignalProducer<Value, Error> {
+	public func debounce(_ interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol) -> SignalProducer<Value, Error> {
 		return lift { $0.debounce(interval, on: scheduler) }
 	}
 
@@ -1113,7 +1113,7 @@ extension SignalProducerProtocol {
 	/// - returns: A producer that sends events for at most `interval` seconds,
 	///            then, if not `completed` - sends `error` with `failed` event
 	///            on `scheduler`.
-	public func timeout(after interval: TimeInterval, raising error: Error, on scheduler: DateSchedulerProtocol) -> SignalProducer<Value, Error> {
+	public func timeout(after interval: DispatchTimeInterval, raising error: Error, on scheduler: TimedSchedulerProtocol) -> SignalProducer<Value, Error> {
 		return lift { $0.timeout(after: interval, raising: error, on: scheduler) }
 	}
 }
@@ -1171,9 +1171,9 @@ extension SignalProducerProtocol where Error == NoError {
 	///            then, if not `completed` - sends `error` with `failed` event
 	///            on `scheduler`.
 	public func timeout<NewError: Swift.Error>(
-		after interval: TimeInterval,
+		after interval: DispatchTimeInterval,
 		raising error: NewError,
-		on scheduler: DateSchedulerProtocol
+		on scheduler: TimedSchedulerProtocol
 	) -> SignalProducer<Value, NewError> {
 		return lift { $0.timeout(after: interval, raising: error, on: scheduler) }
 	}
@@ -1907,11 +1907,11 @@ private struct ReplayState<Value, Error: Swift.Error> {
 ///   - interval: An interval between invocations.
 ///   - scheduler: A scheduler to deliver events on.
 ///
-/// - returns: A producer that sends `NSDate` values every `interval` seconds.
-public func timer(interval: TimeInterval, on scheduler: DateSchedulerProtocol) -> SignalProducer<Date, NoError> {
+/// - returns: A producer that sends `DispatchWallTime` values every `interval`.
+public func timer(interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol) -> SignalProducer<DispatchWallTime, NoError> {
 	// Apple's "Power Efficiency Guide for Mac Apps" recommends a leeway of
 	// at least 10% of the timer interval.
-	return timer(interval: interval, on: scheduler, leeway: interval * 0.1)
+	return timer(interval: interval, on: scheduler, leeway: /* TODO: interval * 0.1 */ .milliseconds(500))
 }
 
 /// Creates a repeating timer of the given interval, sending updates on the
@@ -1931,14 +1931,14 @@ public func timer(interval: TimeInterval, on scheduler: DateSchedulerProtocol) -
 ///             recommends a leeway of at least 10% of the timer interval.
 ///
 /// - returns: A producer that sends `NSDate` values every `interval` seconds.
-public func timer(interval: TimeInterval, on scheduler: DateSchedulerProtocol, leeway: TimeInterval) -> SignalProducer<Date, NoError> {
-	precondition(interval >= 0)
-	precondition(leeway >= 0)
+public func timer(interval: DispatchTimeInterval, on scheduler: TimedSchedulerProtocol, leeway: DispatchTimeInterval) -> SignalProducer<DispatchWallTime, NoError> {
+	precondition(.zero + interval >= .zero)
+	precondition(.zero + leeway >= .zero)
 
 	return SignalProducer { observer, compositeDisposable in
-		compositeDisposable += scheduler.schedule(after: scheduler.currentDate.addingTimeInterval(interval),
+		compositeDisposable += scheduler.schedule(after: scheduler.currentTime + interval,
 		                                          interval: interval,
 		                                          leeway: leeway,
-		                                          action: { observer.send(value: scheduler.currentDate) })
+		                                          action: { observer.send(value: scheduler.currentTime) })
 	}
 }

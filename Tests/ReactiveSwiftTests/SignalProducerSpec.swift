@@ -767,29 +767,29 @@ class SignalProducerSpec: QuickSpec {
 		describe("timer") {
 			it("should send the current date at the given interval") {
 				let scheduler = TestScheduler()
-				let producer = timer(interval: 1, on: scheduler, leeway: 0)
+				let producer = timer(interval: .seconds(1), on: scheduler, leeway: .seconds(0))
 
-				let startDate = scheduler.currentDate
-				let tick1 = startDate.addingTimeInterval(1)
-				let tick2 = startDate.addingTimeInterval(2)
-				let tick3 = startDate.addingTimeInterval(3)
+				let startTime = scheduler.currentTime
+				let tick1 = startTime + .seconds(1)
+				let tick2 = startTime + .seconds(2)
+				let tick3 = startTime + .seconds(3)
 
-				var dates: [Date] = []
+				var dates: [DispatchWallTime] = []
 				producer.startWithValues { dates.append($0) }
 
-				scheduler.advance(by: 0.9)
+				scheduler.advance(by: .milliseconds(900))
 				expect(dates) == []
 
-				scheduler.advance(by: 1)
+				scheduler.advance(by: .seconds(1))
 				expect(dates) == [tick1]
 
 				scheduler.advance()
 				expect(dates) == [tick1]
 
-				scheduler.advance(by: 0.2)
+				scheduler.advance(by: .milliseconds(200))
 				expect(dates) == [tick1, tick2]
 
-				scheduler.advance(by: 1)
+				scheduler.advance(by: .seconds(1))
 				expect(dates) == [tick1, tick2, tick3]
 			}
 
@@ -801,7 +801,7 @@ class SignalProducerSpec: QuickSpec {
 					scheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
 
-				let producer = timer(interval: 3, on: scheduler)
+				let producer = timer(interval: .seconds(3), on: scheduler)
 				producer
 					.start()
 					.dispose()
@@ -809,10 +809,10 @@ class SignalProducerSpec: QuickSpec {
 
 			it("should release the signal when disposed") {
 				let scheduler = TestScheduler()
-				let producer = timer(interval: 1, on: scheduler, leeway: 0)
+				let producer = timer(interval: .seconds(1), on: scheduler, leeway: .microseconds(0))
 				var interrupted = false
 
-				weak var weakSignal: Signal<Date, NoError>?
+				weak var weakSignal: Signal<DispatchWallTime, NoError>?
 				producer.startWithSignal { signal, disposable in
 					weakSignal = signal
 					scheduler.schedule {
@@ -938,19 +938,19 @@ class SignalProducerSpec: QuickSpec {
 				let startScheduler = TestScheduler()
 				let testScheduler = TestScheduler()
 
-				let producer = timer(interval: 2, on: testScheduler, leeway: 0)
+				let producer = timer(interval: .seconds(2), on: testScheduler, leeway: .seconds(0))
 
-				var value: Date?
+				var value: DispatchWallTime?
 				producer.start(on: startScheduler).startWithValues { value = $0 }
 
-				startScheduler.advance(by: 2)
+				startScheduler.advance(by: .seconds(2))
 				expect(value).to(beNil())
 
-				testScheduler.advance(by: 1)
+				testScheduler.advance(by: .seconds(1))
 				expect(value).to(beNil())
 
-				testScheduler.advance(by: 1)
-				expect(value) == testScheduler.currentDate
+				testScheduler.advance(by: .seconds(1))
+				expect(value) == testScheduler.currentTime
 			}
 		}
 
@@ -1737,7 +1737,7 @@ class SignalProducerSpec: QuickSpec {
 					forwardingScheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
 
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: forwardingScheduler))
+				let producer = SignalProducer(signal: _signal.delay(.milliseconds(100), on: forwardingScheduler))
 
 				let observingScheduler: QueueScheduler
 
@@ -1786,7 +1786,7 @@ class SignalProducerSpec: QuickSpec {
 					forwardingScheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
 
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: forwardingScheduler))
+				let producer = SignalProducer(signal: _signal.delay(.milliseconds(100), on: forwardingScheduler))
 
 				let observingScheduler: QueueScheduler
 
@@ -1838,7 +1838,7 @@ class SignalProducerSpec: QuickSpec {
 				} else {
 					scheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: scheduler))
+				let producer = SignalProducer(signal: _signal.delay(.milliseconds(100), on: scheduler))
 
 				var result: Result<Int, NoError>?
 
@@ -1891,7 +1891,7 @@ class SignalProducerSpec: QuickSpec {
 				} else {
 					scheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: scheduler))
+				let producer = SignalProducer(signal: _signal.delay(.milliseconds(100), on: scheduler))
 
 				var result: Result<(), NoError>?
 
